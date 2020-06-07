@@ -20,7 +20,6 @@ proteins = list(SeqIO.parse("Sars-Cov2-nucleotides.fasta", "fasta"))
 len(nucleotides),len(proteins)
 
 #%%
-
 nucleotide_len = [len(str(l.seq)) for l in nucleotides]
 protein_len = [len(str(l.seq)) for l in proteins]
 
@@ -33,10 +32,21 @@ def plothist(data, bin_count):
     plt.show()
 
 #%%
-plothist(nucleotide_len, 100)
+plothist(nucleotide_len, 50)
+plothist(protein_len, 50)
 
 #%%
-plothist(protein_len, 200)
+def is_complete(seq):
+    vals = seq.description.split('|')
+    vals = [item.strip().lower() for item in vals]
+    return (vals[5] == 'complete')
+    
+count = 0
+for seq in nucleotides:
+    if is_complete(seq):
+        count+=1
+
+print(count)
 
 # %%
 # Allocate memory

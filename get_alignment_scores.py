@@ -1,74 +1,66 @@
 #%%
 import os
 import sys
+import time
 import numpy as np
 import pandas as pd
+import random
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 import torch
 import humanize
-import math
 np.random.seed(7) # fix random seed for reproducibility
 
-from Bio import SeqIO,pairwise2
-import Bio.SubsMat.MatrixInfo as matrices
-from Bio.SubsMat import MatrixInfo as matlist
+from Bio import SeqIO
+from Bio import Align
+from Bio.Align import substitution_matrices
 
 # %%
-nucleotides = list(SeqIO.parse("Sars-Cov2-proteins.fasta", "fasta"))
-proteins = list(SeqIO.parse("Sars-Cov2-nucleotides.fasta", "fasta"))
-len(nucleotides),len(proteins)
+def is_complete_genome(seq):
+    desc = seq.description
+    # print(desc)
+    if desc.find('complete genome') != -1:
+        return True
+    else:
+        return False
 
-#%%
-nucleotide_len = [len(str(l.seq)) for l in nucleotides]
-protein_len = [len(str(l.seq)) for l in proteins]
+# %%
+nucleotides = list(SeqIO.parse("Sars-Cov2-nucleotides.fasta", "fasta"))
+print(len(nucleotides),"nucleotide sequences avaialable.")
 
-
-def plothist(data, bin_count):
-    bins = np.linspace(math.ceil(min(data)),math.floor(max(data)),bin_count)
-    plt.xlim([min(data)-5, max(data)+5])
-    plt.hist(data, bins=bins, alpha=0.5)
-    plt.ylabel('count')
-    plt.show()
-
-#%%
-plothist(nucleotide_len, 50)
-plothist(protein_len, 50)
-
-#%%
-def is_complete(seq):
-    vals = seq.description.split('|')
-    vals = [item.strip().lower() for item in vals]
-    return (vals[5] == 'complete')
-    
+# %%
 count = 0
+culled_nucleotides = []
 for seq in nucleotides:
-    if is_complete(seq):
+    if is_complete_genome(seq):
+        culled_nucleotides.append(seq)
         count+=1
 
-print(count)
+print(count,"complete/partially complete genomes selected.")
 
+#%%
+rand_sample_set = 100
+culled_nucleotides = random.sample(culled_nucleotides,rand_sample_set)
+print("Randomly selected",rand_sample_set,"samples." )
 # %%
-# Allocate memory
-num_nu_seqs = len(nucleotides)
-matrix = matlist.blosum62
+num_nu_seqs = len(culled_nucleotides)
 num_clusters = 2
 
 output = torch.zeros([num_nu_seqs,num_nu_seqs], dtype=torch.float32)
 print("Allocated structure:",output.shape)
 print("Allocated size:",humanize.naturalsize(sys.getsizeof(output)))
 
+#%%
+total_ops = num_nu_seqs**2
+aligner = Align.PairwiseAligner()
+aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
 
 # %%
-total_ops = num_nu_seqs**2
 pbar = tqdm(total=total_ops)
-
 for i in range(0,num_nu_seqs):
     for j in range(0,num_nu_seqs):
-        a = pairwise2.align.globaldx(str(nucleotides[i].seq),str(nucleotides[j].seq), matrix)
-        output[i][j] = a[0][2]
+        a = aligner.score(str(culled_nucleotides[i].seq),str(culled_nucleotides[j].seq))
+        output[i][j] = a
         pbar.update(1)
-
 pbar.close()
-
-# %%
+torch.save(output, 'output.pt') 
